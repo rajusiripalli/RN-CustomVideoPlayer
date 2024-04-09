@@ -1,14 +1,57 @@
-import {View, Text, TouchableOpacity, Touchable, Image} from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Touchable,
+  Image,
+  ActivityIndicator,
+  StyleSheet,
+  AppState,
+  Button,
+} from 'react-native';
 import React, {useEffect, useRef, useState} from 'react';
 import Video from 'react-native-video';
 import Slider from '@react-native-community/slider';
 import Orientation from 'react-native-orientation-locker';
-const CustomVideoPlayer = () => {
-  const [clicked, setClicked] = useState(false);
+import PipHandler, {usePipModeListener} from 'react-native-pip-android';
+
+const CustomVideoPlayer = ({videoSource}) => {
+  // Use this boolean to show / hide ui when pip mode changes
+  const inPipMode = usePipModeListener();
+
+  const [backgroundDeteced, setBackgroundDeteced] = React.useState(false);
+
+  const [showControls, setShowControls] = useState(false);
   const [puased, setPaused] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [duration, setDuration] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
   const ref = useRef();
+
+  React.useEffect(() => {
+    const appstatus = AppState.addEventListener('change', ev => {
+      if (ev === 'background') {
+        setBackgroundDeteced(true);
+        PipHandler.enterPipMode(350, 214);
+      } else {
+        setBackgroundDeteced(false);
+      }
+    });
+    return () => {
+      appstatus.remove();
+    };
+  }, []);
+
+  const handleVideoLoad = x => {
+    setDuration(format(x.duration));
+    setIsLoading(false);
+    console.log('handle video load ---> ', x);
+
+    //videoRef.current.seek(startTime);
+    // analyticsCallback("pb_start", 1, "01");
+  };
   const format = seconds => {
     let mins = parseInt(seconds / 60)
       .toString()
@@ -21,34 +64,55 @@ const CustomVideoPlayer = () => {
       <TouchableOpacity
         style={{width: '100%', height: fullScreen ? '100%' : 200}}
         onPress={() => {
-          setClicked(prevclkd => !prevclkd);
+          setShowControls(prevclkd => !prevclkd);
         }}>
-        <Video
-          paused={puased}
-          source={{
-            uri: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-          }}
-          ref={ref}
-          onProgress={x => {
-            //console.log(x);
-            setProgress(x);
-          }}
-          // Can be a URL or a local file.
-          //  ref={(ref) => {
-          //    this.player = ref
-          //  }}                                      // Store reference
-          //  onBuffer={this.onBuffer}                // Callback when remote video is buffering
-          //  onError={this.videoError}
+        {videoSource && (
+          <Video
+            paused={puased}
+            source={{
+              uri: videoSource,
+            }}
+            ref={ref}
+            onProgress={x => {
+              //console.log(x);
+              setProgress(x);
+            }}
+            onLoadStart={() => setIsLoading(true)}
+            onLoad={handleVideoLoad}
+            // Can be a URL or a local file.
+            //  ref={(ref) => {
+            //    this.player = ref
+            //  }}                                      // Store reference
+            //  onBuffer={this.onBuffer}                // Callback when remote video is buffering
+            //  onError={this.videoError}
 
-          // Callback when video cannot be loaded
-          muted={false}
-          style={{width: '100%', height: fullScreen ? '100%' : 200}}
-          resizeMode="cover"
-        />
-        {clicked && (
+            // Callback when video cannot be loaded
+            muted={false}
+            style={{width: '100%', height: fullScreen ? '100%' : 200}}
+            resizeMode="cover"
+            playInBackground
+            pictureInPicture
+          />
+        )}
+        {isLoading && (
+          <View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'grey',
+            }}>
+            <ActivityIndicator
+              size="large"
+              color={'red'}
+              style={{position: 'absolute', zIndex: 1, alignSelf: 'center'}}
+            />
+          </View>
+        )}
+        {showControls && (
           <TouchableOpacity
             onPress={() => {
-              setClicked(prevclkd => !prevclkd);
+              setShowControls(prevclkd => !prevclkd);
             }}
             style={{
               width: '100%',
@@ -119,6 +183,7 @@ const CustomVideoPlayer = () => {
                 style={{width: '80%', height: 40}}
                 minimumValue={0}
                 maximumValue={progress.seekableDuration}
+                //maximumValue={duration}
                 minimumTrackTintColor="#FFFFFF"
                 maximumTrackTintColor="#fff"
                 onValueChange={x => {
@@ -127,6 +192,7 @@ const CustomVideoPlayer = () => {
               />
               <Text style={{color: 'white'}}>
                 {format(progress.seekableDuration)}
+                {/* {duration} */}
               </Text>
             </View>
             <View
@@ -162,6 +228,16 @@ const CustomVideoPlayer = () => {
           </TouchableOpacity>
         )}
       </TouchableOpacity>
+
+      {!backgroundDeteced && (
+        <Button
+          onPress={() => {
+            PipHandler.enterPipMode(300, 214);
+          }}
+          title="PIP"
+          style={{marginTop: 20}}
+        />
+      )}
     </View>
   );
 };
